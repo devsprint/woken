@@ -16,16 +16,17 @@
 
 package eu.hbp.mip.woken.ssl
 
-import java.security.{ KeyStore, SecureRandom }
-import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory }
+import java.security.{KeyStore, SecureRandom}
+import javax.net.ssl.{KeyManagerFactory, SSLContext, TrustManagerFactory}
 
+import eu.hbp.mip.woken.config.WokenConfig
 import spray.io.ServerSSLEngineProvider
 
 trait WokenSSLConfiguration {
 
   implicit val wokenSSLContext: SSLContext = {
-    val keyStoreRes = "/woken-keystore.jks"
-    val password    = "password"
+    val keyStoreRes = WokenConfig.app.sslJksFilePath
+    val password = WokenConfig.app.sslJksPassword
 
     val keyStore = KeyStore.getInstance("jks")
     keyStore.load(getClass.getResourceAsStream(keyStoreRes), password.toCharArray)
@@ -36,8 +37,8 @@ trait WokenSSLConfiguration {
 
     val context = SSLContext.getInstance("TLS")
     context.init(keyManagerFactory.getKeyManagers,
-                 trustManagerFactory.getTrustManagers,
-                 new SecureRandom)
+      trustManagerFactory.getTrustManagers,
+      new SecureRandom)
 
     context
   }

@@ -32,6 +32,8 @@ object WokenConfig {
     val jobServiceName: String              = appConf.getString("jobServiceName")
     val basicAuthUsername: String           = appConf.getString("basicAuth.username")
     val basicAuthPassword: String           = appConf.getString("basicAuth.password")
+    val sslJksFilePath: String              = appConf.getString("ssl.jks.file.path")
+    val sslJksPassword: String              = appConf.getString("ssl.jks.password")
 
     case class MasterRouterConfig(miningActorsLimit: Int, experimentActorsLimit: Int)
 
