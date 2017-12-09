@@ -17,25 +17,20 @@
 package eu.hbp.mip.woken.web
 
 import scala.concurrent.duration._
-import akka.actor.{
-  ActorRef,
-  ActorRefFactory,
-  ActorSystem,
-  Address,
-  ExtendedActorSystem,
-  Extension,
-  ExtensionKey,
-  Props
-}
+import akka.actor.{ActorRef, ActorRefFactory, ActorSystem, Address, ExtendedActorSystem, Extension, ExtensionKey, Props}
 import akka.io.IO
 import akka.util.Timeout
 import akka.cluster.Cluster
+import cats.effect.IO
+import com.typesafe.config.{Config, ConfigFactory}
 import spray.can.Http
-import eu.hbp.mip.woken.api.{ Api, MasterRouter, RoutedHttpService }
-import eu.hbp.mip.woken.config.ResultDatabaseConfig
-import eu.hbp.mip.woken.core.{ Core, CoreActors }
+import eu.hbp.mip.woken.api.{Api, MasterRouter, RoutedHttpService}
+import eu.hbp.mip.woken.config.{DatabaseConfiguration, MetaDatabaseConfig, ResultDatabaseConfig, WokenConfig}
+import eu.hbp.mip.woken.core.{Core, CoreActors}
 import eu.hbp.mip.woken.config.WokenConfig.app
 import eu.hbp.mip.woken.core.validation.ValidationPoolManager
+import eu.hbp.mip.woken.dao.{FeaturesDAL, NodeDAL, WokenRepositoryDAO}
+import eu.hbp.mip.woken.service.JobResultService
 import eu.hbp.mip.woken.ssl.WokenSSLConfiguration
 
 class RemoteAddressExtensionImpl(system: ExtendedActorSystem) extends Extension {
@@ -58,8 +53,34 @@ trait BootedCore
   /**
     * Construct the ActorSystem we will use in our application
     */
-  lazy val system: ActorSystem              = ActorSystem(app.systemName)
-  lazy val actorRefFactory: ActorRefFactory = system
+  override lazy val system: ActorSystem              = ActorSystem(app.systemName)
+  override lazy val actorRefFactory: ActorRefFactory = system
+
+  override lazy val config: Config = ConfigFactory.load()
+  private lazy val resultsDbConfig = DatabaseConfiguration
+    .factory(config)("woken")
+    .getOrElse(throw new IllegalStateException("Invalid configuration"))
+
+  private lazy val featuresDbConnection = DatabaseConfiguration
+    .factory(config)(WokenConfig.defaultSettings.defaultDb)
+    .getOrElse(throw new IllegalStateException("Invalid configuration"))
+
+  override lazy val featuresDAL = FeaturesDAL(featuresDbConnection)
+
+  override lazy val resultsDAL: NodeDAL = ResultDatabaseConfig(resultsDbConfig).dal
+  val resultDbConfig: DatabaseConfiguration = ???
+  for {
+    xa <- DatabaseConfiguration.dbTransactor[IO](resultDbConfig)
+    wokenDb = new WokenRepositoryDAO[IO](xa)
+  } yield {
+    JobResultService(wokenDb.jobResults)
+  }
+
+  private lazy val metaDbConnection = DatabaseConfiguration
+    .factory(config)(WokenConfig.defaultSettings.defaultMetaDb)
+    .getOrElse(throw new IllegalStateException("Invalid configuration"))
+
+  override lazy val metaDbConfig = MetaDatabaseConfig(metaDbConnection)
 
   //Cluster(system).join(RemoteAddressExtension(system).getAddress())
   lazy val cluster = Cluster(system)
@@ -74,7 +95,8 @@ trait BootedCore
     * Create and start actor that acts as akka entry-point
     */
   val mainRouter: ActorRef =
-    system.actorOf(MasterRouter.props(this, ResultDatabaseConfig.dal), name = "entrypoint")
+    system.actorOf(MasterRouter.props(this, featuresDAL, resultsDAL, metaDbConfig),
+                   name = "entrypoint")
 
   /**
     * Create and start actor responsible to register validation node

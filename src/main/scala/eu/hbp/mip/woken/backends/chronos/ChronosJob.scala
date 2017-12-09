@@ -16,12 +16,9 @@
 
 package eu.hbp.mip.woken.backends.chronos
 
-import java.time.OffsetDateTime
-
 import spray.json.{
   DefaultJsonProtocol,
   DeserializationException,
-  JsObject,
   JsString,
   JsValue,
   RootJsonFormat
@@ -154,8 +151,8 @@ case class ChronosJob(
     disabled: Boolean = false,
     owner: Option[String] = None,
     ownerName: Option[String] = None,
-    environmentVariables: List[EnvironmentVariable]
-    // retries: Int = 0,
+    environmentVariables: List[EnvironmentVariable],
+    retries: Int = 2
     // dataProcessingJobType: Boolean = false,
     // scheduleTimeZone: Option[String] = None
     // concurrent: Boolean = false,
@@ -168,17 +165,6 @@ case class ChronosJob(
     // taskInfoData: Option[String] = None,
     // fetch: List[Fetch] = List()
     // constraints: List[Constraint] = List()
-)
-
-case class ChronosJobLiveliness(
-    name: String,
-    successCount: Int,
-    errorCount: Int,
-    lastSuccess: OffsetDateTime,
-    lastError: OffsetDateTime,
-    softError: Boolean,
-    errorsSinceLastSuccess: Int
-// "schedule": "R0/2017-11-29T23:13:40.989Z/PT1M"
 )
 
 /**
@@ -221,20 +207,6 @@ object ChronosJob extends DefaultJsonProtocol {
     EnvironmentVariable.apply
   )
   implicit val uriFormat: RootJsonFormat[Uri]               = jsonFormat1(Uri.apply)
-  implicit val chronosJobFormat: RootJsonFormat[ChronosJob] = jsonFormat19(ChronosJob.apply)
+  implicit val chronosJobFormat: RootJsonFormat[ChronosJob] = jsonFormat20(ChronosJob.apply)
 
-  implicit object ChronosJobLivelinessFormat extends RootJsonFormat[ChronosJobLiveliness] {
-    def write(c: ChronosJobLiveliness) = JsObject(
-      "name" -> JsString(c.name) /*,
-      "red" -> JsNumber(c.red),
-      "green" -> JsNumber(c.green),
-      "blue" -> JsNumber(c.blue)*/
-    )
-    def read(value: JsValue): ChronosJobLiveliness =
-      value.asJsObject.getFields("name", "red", "green", "blue") match {
-        //case Seq(JsString(name), JsNumber(red), JsNumber(green), JsNumber(blue)) =>
-        //  new Color(name, red.toInt, green.toInt, blue.toInt)
-        case _ => throw DeserializationException("ChronosJob expected")
-      }
-  }
 }

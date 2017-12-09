@@ -23,11 +23,8 @@ import spray.http.StatusCodes
 import spray.httpx.marshalling.ToResponseMarshaller
 import spray.json._
 import eu.hbp.mip.woken.messages.external._
-import eu.hbp.mip.woken.config.WokenConfig
-import eu.hbp.mip.woken.config.MetaDatabaseConfig
-import eu.hbp.mip.woken.core.model.JobResult
-import eu.hbp.mip.woken.core.{ ExperimentActor, JobResults, RestMessage }
-import org.slf4j.LoggerFactory
+import eu.hbp.mip.woken.config.{ MetaDatabaseConfig, WokenConfig }
+import eu.hbp.mip.woken.core.{ ExperimentActor, RestMessage }
 
 /**
   * Transformations for input and output values of functions
@@ -54,10 +51,10 @@ object FunctionsInOut {
 
   }
 
-  def query2job(query: MiningQuery): DockerJob = {
+  def miningQuery2job(metaDbConfig: MetaDatabaseConfig)(query: MiningQuery): DockerJob = {
 
     val jobId    = UUID.randomUUID().toString
-    val metadata = MetaDatabaseConfig.getMetaData(query.dbAllVars)
+    val metadata = metaDbConfig.getMetaData(mainTable, query.dbAllVars)
 
     DockerJob(jobId,
               dockerImage(query.algorithm.code),
@@ -67,10 +64,12 @@ object FunctionsInOut {
               metadata = metadata)
   }
 
-  def query2job(query: ExperimentQuery): ExperimentActor.Job = {
+  def experimentQuery2job(
+      metaDbConfig: MetaDatabaseConfig
+  )(query: ExperimentQuery): ExperimentActor.Job = {
 
     val jobId    = UUID.randomUUID().toString
-    val metadata = MetaDatabaseConfig.getMetaData(query.dbAllVars)
+    val metadata = metaDbConfig.getMetaData(mainTable, query.dbAllVars)
 
     ExperimentActor.Job(jobId, defaultDb, mainTable, query, metadata = metadata)
   }
@@ -89,34 +88,4 @@ case class JsonMessage(json: JsValue) extends RestMessage {
   })
   override def marshaller: ToResponseMarshaller[JsonMessage] =
     ToResponseMarshaller.fromMarshaller(StatusCodes.OK)(sprayJsonMarshaller(JsonFormat))
-}
-
-object RequestProtocol extends DefaultJsonProtocol with JobResults.Factory {
-
-  private[this] val log = LoggerFactory.getLogger(this.getClass.getName)
-
-  def apply(results: scala.collection.Seq[JobResult]): RestMessage = {
-    import ApiJsonSupport._
-
-    log.debug(s"Received job results:  $results")
-
-    results match {
-      case res :: Nil =>
-        res.shape match {
-          case "pfa_yaml" =>
-            val json = yaml2Json(Yaml(res.data.getOrElse("'No results returned'")))
-            JsonMessage(json)
-
-          case "pfa_json" =>
-            val str  = res.data.getOrElse("'No results returned'")
-            val json = JsonParser(str)
-            JsonMessage(json)
-
-          case "application/highcharts+json" =>
-            val str  = res.data.getOrElse("'No results returned'")
-            val json = JsonParser(str)
-            JsonMessage(json)
-        }
-    }
-  }
 }

@@ -16,10 +16,13 @@
 
 package eu.hbp.mip.woken.core.model
 
-import eu.hbp.mip.woken.backends.DockerJob
-
-object JobToCWL {
-
-  def enrich(jobDto: DockerJob): CWLProcess =
-    ???
+object Shapes {
+  val error               = "error"
+  val pfa_json            = "pfa_json"
+  val pfa_experiment_json = "pfa_experiment_json"
+  val pfa_yaml            = "pfa_yaml"
+  val html                = "html"
+  val svg                 = "svg"
+  val highcharts          = "highcharts"
+  val highcharts_mime     = "application/highcharts+json"
 }

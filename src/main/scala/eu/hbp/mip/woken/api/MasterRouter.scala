@@ -26,8 +26,13 @@ import com.github.levkhomich.akka.tracing.ActorTracing
 import com.typesafe.config.ConfigFactory
 import eu.hbp.mip.woken.api.MasterRouter.QueuesSize
 import eu.hbp.mip.woken.backends.DockerJob
-import eu.hbp.mip.woken.config.{ JdbcConfiguration, JobsConfiguration, WokenConfig }
-import eu.hbp.mip.woken.dao.JobResultsDAL
+import eu.hbp.mip.woken.config.{
+  DatabaseConfiguration,
+  JobsConfiguration,
+  MetaDatabaseConfig,
+  WokenConfig
+}
+import eu.hbp.mip.woken.dao.{ FeaturesDAL, JobResultsDAL }
 
 object MasterRouter {
 
@@ -39,15 +44,25 @@ object MasterRouter {
     def isEmpty: Boolean = experiments == 0 && mining == 0
   }
 
-  def props(api: Api, resultDatabase: JobResultsDAL): Props =
-    Props(new MasterRouter(api, resultDatabase, query2job))
+  def props(api: Api,
+            featuresDatabase: FeaturesDAL,
+            resultDatabase: JobResultsDAL,
+            metaDbConfig: MetaDatabaseConfig): Props =
+    Props(
+      new MasterRouter(api,
+                       featuresDatabase,
+                       resultDatabase,
+                       experimentQuery2job(metaDbConfig),
+                       miningQuery2job(metaDbConfig))
+    )
 
 }
 
-class MasterRouter(val api: Api,
-                   val resultDatabase: JobResultsDAL,
-                   query2jobF: ExperimentQuery => ExperimentActor.Job = query2job,
-                   query2jobFM: MiningQuery => DockerJob = query2job)
+case class MasterRouter(api: Api,
+                        featuresDatabase: FeaturesDAL,
+                        resultDatabase: JobResultsDAL,
+                        query2jobF: ExperimentQuery => ExperimentActor.Job,
+                        query2jobFM: MiningQuery => DockerJob)
     extends Actor
     with ActorTracing
     with ActorLogging {
@@ -63,12 +78,14 @@ class MasterRouter(val api: Api,
   private lazy val jobsConf = JobsConfiguration
     .read(config)
     .getOrElse(throw new IllegalStateException("Invalid configuration"))
-  private lazy val coordinatorConfig = CoordinatorConfig(api.chronosHttp,
-                                                         resultDatabase,
-                                                         createQueryResult,
-                                                         WokenConfig.app.dockerBridgeNetwork,
-                                                         jobsConf,
-                                                         JdbcConfiguration.factory(config))
+  private lazy val coordinatorConfig = CoordinatorConfig(
+    api.chronosHttp,
+    featuresDatabase,
+    resultDatabase,
+    WokenConfig.app.dockerBridgeNetwork,
+    jobsConf,
+    DatabaseConfiguration.factory(config)
+  )
 
   var experimentsActiveActors: Set[ActorRef] = Set.empty
   val experimentsActiveActorsLimit: Int      = WokenConfig.app.masterRouterConfig.miningActorsLimit
@@ -95,6 +112,9 @@ class MasterRouter(val api: Api,
         sender() ! CoordinatorActor.ErrorResponse("Too  busy to accept new jobs.")
       }
 
+    case CoordinatorActor.Response(results) =>
+      sender() ! results
+
     case query: ExperimentQuery =>
       log.debug(s"Received message: $query")
       if (experimentsActiveActors.size <= experimentsActiveActorsLimit) {
@@ -116,6 +136,8 @@ class MasterRouter(val api: Api,
       experimentsActiveActors -= a
       log.debug(s"Experiments active: ${experimentsActiveActors.size}")
 
-    case _ => // ignore
+    case e =>
+      log.warning(s"Received unhandled request $e of type ${e.getClass}")
+
   }
 }

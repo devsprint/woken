@@ -18,7 +18,7 @@ package eu.hbp.mip.woken.backends.chronos
 
 import cats.data.ValidatedNel
 import eu.hbp.mip.woken.backends.DockerJob
-import eu.hbp.mip.woken.config.{ JdbcConfiguration, JobsConfiguration }
+import eu.hbp.mip.woken.config.{ DatabaseConfiguration, JobsConfiguration }
 import eu.hbp.mip.woken.messages.external.{ Algorithm, MiningQuery, VariableId }
 import org.scalatest.{ FlatSpec, Matchers }
 import spray.json._
@@ -40,14 +40,14 @@ class JobToChronosTest extends FlatSpec with Matchers {
     algorithm = algorithm
   )
 
-  val jdbcConfs: Map[String, ValidatedNel[String, JdbcConfiguration]] = Map(
-    "features_db" -> JdbcConfiguration(
+  val jdbcConfs: Map[String, ValidatedNel[String, DatabaseConfiguration]] = Map(
+    "features_db" -> DatabaseConfiguration(
       jdbcDriver = "org.postgresql.Driver",
       jdbcUrl = "jdbc:postgres:localhost:5432/features",
       jdbcUser = "user",
       jdbcPassword = "test"
     ).validNel,
-    "woken_db" -> JdbcConfiguration(
+    "woken_db" -> DatabaseConfiguration(
       jdbcDriver = "org.postgresql.Driver",
       jdbcUrl = "jdbc:postgres:localhost:5432/woken",
       jdbcUser = "woken",
@@ -134,7 +134,8 @@ class JobToChronosTest extends FlatSpec with Matchers {
       mem = Some(512.0),
       disk = None,
       owner = Some("mip@chuv.ch"),
-      environmentVariables = environmentVariables
+      environmentVariables = environmentVariables,
+      retries = 0
     )
 
     chronosJob.getOrElse(None) shouldBe expected

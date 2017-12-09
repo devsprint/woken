@@ -14,31 +14,35 @@ lazy val `woken` =
           library.akkaActor,
           library.akkaRemote,
           library.akkaCluster,
+          library.akkaContrib,
           library.akkaSlf4j,
           library.akkaTracingCore,
           library.akkaTracingSpray,
           library.sprayCan,
           library.sprayJson,
           library.sprayRouting,
+          library.sprayClient,
           library.slf4j,
           library.log4jSlf4j,
           library.disruptor,
           library.catsCore,
-          //library.scalaz,
+          library.scalaz,
           library.config,
           library.doobieCore,
           library.doobiePostgres,
+          library.doobieHikari,
           library.yaml,
           library.hadrian,
           library.wokenMessages,
           library.spraySwagger,
           library.swaggerUI,
+          //library.scalaCache,
           library.scalaCheck   % Test,
           library.scalaTest    % Test,
           library.akkaTestkit  % Test
         ),
         includeFilter in (Compile, unmanagedResources) := "*.xml" || "*.conf" || "*.html",
-        includeFilter in (Test, unmanagedResources) := "*.json",
+        includeFilter in (Test, unmanagedResources) := "*.json" || "*.conf",
         assemblyJarName in assembly := "woken-all.jar"
       )
     )
@@ -63,23 +67,26 @@ lazy val library =
       val cats          = "1.0.0-RC1"
       val scalaz        = "7.2.7"
       val config        = "1.2.1"
-      val doobie        = "0.4.0"
+      val doobie        = "0.5.0-M9"
       val snakeyaml     = "1.17"
       val hadrian       = "0.8.5"
       val wokenMessages = "2.0.11"
       val spraySwagger  = "0.5.0"
       val swaggerUI     = "2.0.12"
+      val scalaCache    = "0.21.0"
     }
     val scalaCheck: ModuleID   = "org.scalacheck"    %% "scalacheck"   % Version.scalaCheck
     val scalaTest: ModuleID    = "org.scalatest"     %% "scalatest"    % Version.scalaTest
     val akkaActor: ModuleID    = "com.typesafe.akka" %% "akka-actor"   % Version.akka
     val akkaRemote: ModuleID   = "com.typesafe.akka" %% "akka-remote"  % Version.akka
     val akkaCluster: ModuleID  = "com.typesafe.akka" %% "akka-cluster" % Version.akka
+    val akkaContrib: ModuleID  = "com.typesafe.akka" %% "akka-contrib" % Version.akka
     val akkaSlf4j: ModuleID    = "com.typesafe.akka" %% "akka-slf4j"   % Version.akka
     val akkaTestkit: ModuleID  = "com.typesafe.akka" %% "akka-testkit" % Version.akka
     val akkaTracingCore: ModuleID  = "com.github.levkhomich" %% "akka-tracing-core" % Version.akkaTracing
     val akkaTracingSpray: ModuleID  = "com.github.levkhomich" %% "akka-tracing-spray" % Version.akkaTracing excludeAll ExclusionRule(organization = "io.spray")
     val sprayCan: ModuleID     = "io.spray"          %% "spray-can"    % Version.spray exclude("io.spray", "spray-routing")
+    val sprayClient: ModuleID  = "io.spray"          %% "spray-client" % Version.spray
     val sprayRouting: ModuleID = "io.spray"          %% "spray-routing-shapeless2" % Version.sprayRouting
     val sprayJson: ModuleID    = "io.spray"          %% "spray-json"   % Version.sprayJson
     val slf4j: ModuleID        = "org.slf4j"          % "slf4j-api"    % Version.slf4j
@@ -90,10 +97,12 @@ lazy val library =
     val config: ModuleID       = "com.typesafe"       % "config"       % Version.config
     val doobieCore: ModuleID   = "org.tpolecat"      %% "doobie-core"  % Version.doobie
     val doobiePostgres: ModuleID = "org.tpolecat"    %% "doobie-postgres" % Version.doobie
+    val doobieHikari: ModuleID = "org.tpolecat"      %% "doobie-hikari" % Version.doobie
     val yaml: ModuleID         = "org.yaml"           % "snakeyaml"    % Version.snakeyaml
     val hadrian: ModuleID      = "com.opendatagroup" %  "hadrian"       % Version.hadrian
     val spraySwagger: ModuleID = "com.gettyimages"   %% "spray-swagger" % Version.spraySwagger excludeAll ExclusionRule(organization = "io.spray")
     val swaggerUI: ModuleID    = "org.webjars"        % "swagger-ui"   % Version.swaggerUI
+    val scalaCache: ModuleID   = "com.github.cb372"  %% "scalacache-core" % Version.scalaCache
     val wokenMessages: ModuleID = "eu.humanbrainproject.mip" %% "woken-messages" % Version.wokenMessages
   }
 
@@ -108,7 +117,7 @@ lazy val settings = commonSettings ++ gitSettings ++ scalafmtSettings
 
 lazy val commonSettings =
   Seq(
-    scalaVersion := "2.11.8",
+    scalaVersion := "2.11.11",
     organization in ThisBuild := "eu.humanbrainproject.mip",
     organizationName in ThisBuild := "Human Brain Project MIP by LREN CHUV",
     homepage in ThisBuild := Some(url(s"https://github.com/HBPMedical/${name.value}/#readme")),
@@ -127,6 +136,7 @@ lazy val commonSettings =
       "-Yno-adapted-args",
       "-Ywarn-dead-code",
       "-Ywarn-value-discard",
+      "-Ypartial-unification",
       "-language:_",
       "-target:jvm-1.8",
       "-encoding",

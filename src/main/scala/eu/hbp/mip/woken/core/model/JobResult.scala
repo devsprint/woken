@@ -16,32 +16,66 @@
 
 package eu.hbp.mip.woken.core.model
 
-import java.time.{ LocalDateTime, OffsetDateTime, ZoneOffset }
+import java.time.OffsetDateTime
 
-import spray.json._
+import spray.json.{ JsArray, JsObject, JsValue }
 
-case class JobResult(jobId: String,
-                     node: String,
-                     timestamp: OffsetDateTime,
-                     shape: String,
-                     function: String,
-                     data: Option[String] = None,
-                     error: Option[String] = None)
+sealed trait JobResult extends Product with Serializable {
+  def jobId: String
+  def node: String
+  def timestamp: OffsetDateTime
+  def function: String
+}
 
-object JobResult extends DefaultJsonProtocol {
+case class PfaJobResult(jobId: String,
+                        node: String,
+                        timestamp: OffsetDateTime,
+                        function: String,
+                        model: JsObject)
+    extends JobResult {
 
-  implicit object OffsetDateTimeJsonFormat extends RootJsonFormat[OffsetDateTime] {
-    override def write(x: OffsetDateTime) = {
-      require(x ne null)
-      JsNumber(x.toEpochSecond)
-    }
-    override def read(value: JsValue) = value match {
-      case JsNumber(x) =>
-        OffsetDateTime.of(LocalDateTime.ofEpochSecond(x.toLong, 0, ZoneOffset.UTC), ZoneOffset.UTC)
-      case unknown =>
-        deserializationError("Expected OffsetDateTime as JsNumber, but got " + unknown)
-    }
+  def injectCell(name: String, value: JsValue): PfaJobResult = {
+    val cells        = model.fields.getOrElse("cells", JsObject()).asJsObject
+    val updatedCells = JsObject(cells.fields + (name -> value))
+    val updatedModel = JsObject(model.fields + ("cells" -> updatedCells))
+
+    copy(model = updatedModel)
   }
 
-  implicit val jobResultFormat: JsonFormat[JobResult] = lazyFormat(jsonFormat7(JobResult.apply))
 }
+
+case class PfaExperimentJobResult(jobId: String,
+                                  node: String,
+                                  timestamp: OffsetDateTime,
+                                  models: JsArray)
+    extends JobResult {
+
+  override val function = "experiment"
+}
+
+case class ErrorJobResult(jobId: String,
+                          node: String,
+                          timestamp: OffsetDateTime,
+                          function: String,
+                          error: String)
+    extends JobResult
+
+sealed trait VisualisationJobResult extends JobResult {
+  def shape: String
+}
+
+case class JsonDataJobResult(jobId: String,
+                             node: String,
+                             timestamp: OffsetDateTime,
+                             shape: String,
+                             function: String,
+                             data: JsObject)
+    extends VisualisationJobResult
+
+case class OtherDataJobResult(jobId: String,
+                              node: String,
+                              timestamp: OffsetDateTime,
+                              shape: String,
+                              function: String,
+                              data: String)
+    extends VisualisationJobResult

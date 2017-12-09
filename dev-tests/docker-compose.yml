@@ -71,7 +71,8 @@ services:
 
   chronos:
     image: mesosphere/chronos:v3.0.2
-    command: '--zk_hosts zookeeper:2181 --master zk://zookeeper:2181/mesos'
+    command: '--zk_hosts zookeeper:2181 --master zk://zookeeper:2181/mesos --zk_timeout 30000'
+    restart: "always"
     hostname: chronos
     ports:
       - "4400:4400"
@@ -188,7 +189,7 @@ services:
       # Change this if connecting to a different zipkin server
       - ZIPKIN_BASE_URL=http://zipkin:9411
     ports:
-      - 80:80
+      - 9080:80
     depends_on:
       - zipkin
 
@@ -233,8 +234,8 @@ services:
     depends_on:
       - woken
 
-  portal_backend:
-    image: "hbpmip/portal-backend:2.4.1"
+  portalbackend:
+    image: "hbpmip/portal-backend:90dad37"
     container_name: "backend-test"
     restart: "no"
     ports:
@@ -272,21 +273,21 @@ services:
     image: "waisbrot/wait"
     restart: "no"
     environment:
-      - TARGETS=portal_backend:8080
+      - TARGETS=portalbackend:8080
     depends_on:
-      - portal_backend
+      - portalbackend
 
   frontend:
     image: hbpmip/portal-frontend:2.3.2
     depends_on:
-      - portal_backend
+      - portalbackend
     ports:
       - "80:80"
     environment:
       WORKER_PROCESSES: 1
       ERROR_LOG_LEVEL: warn
       PORTAL_VIRTUAL_HOST: frontend
-      PORTAL_BACKEND_SERVER: portal_backend:8080
+      PORTAL_BACKEND_SERVER: portalbackend:8080
       PORTAL_BACKEND_CONTEXT: services
 
 networks:
