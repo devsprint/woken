@@ -17,12 +17,10 @@
 package eu.hbp.mip.woken.api
 
 import akka.actor.{ ActorRef, ActorRefFactory, ActorSystem }
+import akka.http.scaladsl.server.Route
 import com.typesafe.config.ConfigFactory
 import eu.hbp.mip.woken.authentication.BasicAuthentication
 import eu.hbp.mip.woken.config.{ DatabaseConfiguration, JobsConfiguration, WokenConfig }
-import spray.http.MediaTypes._
-import spray.http._
-import spray.routing.Route
 import eu.hbp.mip.woken.messages.external._
 import eu.hbp.mip.woken.core._
 import eu.hbp.mip.woken.dao.FeaturesDAL
@@ -46,7 +44,7 @@ class MiningService(val chronosService: ActorRef,
 
   implicit val executionContext = context.dispatcher
 
-  val routes: Route = (_) => () // mining ~ experiment ~ listMethods
+  val routes: Route = (_) => ??? // mining ~ experiment ~ listMethods
 
   /*
   import ApiJsonSupport._

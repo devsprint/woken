@@ -19,9 +19,9 @@ package eu.hbp.mip.woken.api
 import java.util.UUID
 
 import akka.actor.ActorRef
+import akka.http.scaladsl.marshalling.ToResponseMarshaller
+import akka.http.scaladsl.model.StatusCodes
 import eu.hbp.mip.woken.backends.DockerJob
-import spray.http.StatusCodes
-import spray.httpx.marshalling.ToResponseMarshaller
 import spray.json._
 import eu.hbp.mip.woken.messages.external._
 import eu.hbp.mip.woken.config.WokenConfig
@@ -32,6 +32,7 @@ import eu.hbp.mip.woken.service.VariablesMetaService
   * Transformations for input and output values of functions
   */
 object FunctionsInOut {
+
   import WokenConfig.defaultSettings._
 
   implicit class QueryEnhanced(val query: Query) extends AnyVal {
@@ -47,9 +48,11 @@ object FunctionsInOut {
     def dbAllVars: List[String] =
       (query.variables ++ query.covariables ++ query.grouping).distinct.map(toField)
 
-    def dbVariables: List[String]   = query.variables.map(toField)
+    def dbVariables: List[String] = query.variables.map(toField)
+
     def dbCovariables: List[String] = query.covariables.map(toField)
-    def dbGrouping: List[String]    = query.grouping.map(toField)
+
+    def dbGrouping: List[String] = query.grouping.map(toField)
 
   }
 
@@ -85,11 +88,13 @@ object FunctionsInOut {
 }
 
 case class JsonMessage(json: JsValue) extends RestMessage {
-  import spray.httpx.SprayJsonSupport._
+
   import ApiJsonSupport._
+
   val JsonFormat: RootJsonFormat[JsonMessage] = lift(new RootJsonWriter[JsonMessage] {
     override def write(obj: JsonMessage): JsValue = JsValueFormat.write(json)
   })
+
   override def marshaller: ToResponseMarshaller[JsonMessage] =
     ToResponseMarshaller.fromMarshaller(StatusCodes.OK)(sprayJsonMarshaller(JsonFormat))
 }

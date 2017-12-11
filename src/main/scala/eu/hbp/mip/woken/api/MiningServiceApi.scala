@@ -16,12 +16,7 @@
 
 package eu.hbp.mip.woken.api
 
-import javax.ws.rs.Path
-
-import com.wordnik.swagger.annotations.{ Api => SwaggerApi, _ }
-import spray.routing._
-//import eu.hbp.mip.woken.core.CoordinatorActor.Result
-//import eu.hbp.mip.woken.core.CoordinatorActor.{ Result => ExperimentResult }
+import akka.http.scaladsl.server.Directives
 
 /**
   * Document the API, try not to pollute the code with annotations

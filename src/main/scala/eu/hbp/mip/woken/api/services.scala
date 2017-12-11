@@ -17,13 +17,11 @@
 package eu.hbp.mip.woken.api
 
 import akka.event.LoggingReceive
-import spray.http.StatusCodes._
-import spray.http._
-import spray.routing._
-import spray.util.LoggingContext
 
 import util.control.NonFatal
 import akka.actor.{ Actor, ActorContext, ActorLogging }
+import akka.http.scaladsl.model.{ HttpEntity, StatusCode }
+import akka.http.scaladsl.server.{ ExceptionHandler, RejectionHandler, RequestContext, Route }
 
 /**
   * Holds potential error response with the HTTP status and optional body
@@ -42,7 +40,6 @@ case class ErrorResponseException(responseStatus: StatusCode, response: Option[H
   * JSON API (e.g. see how Foursquare do it).
   */
 trait FailureHandling {
-  this: HttpService =>
 
   // For Spray > 1.1-M7 use routeRouteResponse
   // see https://groups.google.com/d/topic/spray-user/zA_KR4OBs1I/discussion
@@ -92,11 +89,7 @@ trait FailureHandling {
   *
   * @param route the (concatenated) route
   */
-class RoutedHttpService(route: Route)
-    extends Actor
-    with HttpService
-    with ActorLogging
-    with PerRequestCreator {
+class RoutedHttpService(route: Route) extends Actor with ActorLogging with PerRequestCreator {
 
   implicit def actorRefFactory: ActorContext = context
 
