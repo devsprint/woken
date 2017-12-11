@@ -18,20 +18,27 @@ package eu.hbp.mip.woken.api
 
 import java.util.UUID
 
-import akka.actor.{ ActorRef, ActorRefFactory, ActorSystem, Props }
+import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
 import eu.hbp.mip.woken.api.MasterRouter.{ QueuesSize, RequestQueuesSize }
 import eu.hbp.mip.woken.backends.DockerJob
 import eu.hbp.mip.woken.config._
-import eu.hbp.mip.woken.core.ExperimentActor.{ ErrorResponse, Start }
-import eu.hbp.mip.woken.core.{ CoordinatorConfig, ExperimentActor }
-import eu.hbp.mip.woken.core.model.JobResult
-import eu.hbp.mip.woken.dao.{ FeaturesDAL, JobResultsDAL }
+import eu.hbp.mip.woken.core.ExperimentActor.Start
+import eu.hbp.mip.woken.core.{
+  CoordinatorConfig,
+  ExperimentActor,
+  FakeCoordinatorActor,
+  FakeExperimentActor
+}
+import eu.hbp.mip.woken.dao.FeaturesDAL
 import eu.hbp.mip.woken.messages.external._
-import FunctionsInOut._
 import com.typesafe.config.{ Config, ConfigFactory }
+import eu.hbp.mip.woken.service.AlgorithmLibraryService
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 import spray.json.JsObject
+import cats.data.Validated._
+import eu.hbp.mip.woken.core.model.ErrorJobResult
+import eu.hbp.mip.woken.cromwell.core.ConfigUtil
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -48,56 +55,15 @@ class MasterRouterTest
 
   override def afterAll(): Unit = TestKit.shutdownActorSystem(system)
 
-  case class FakeJobResultsDAL(jobResults: List[JobResult] = List.empty) extends JobResultsDAL {
-    override def findJobResults(jobId: String): List[JobResult] = jobResults
-  }
+  import eu.hbp.mip.woken.service.TestServices._
 
-  val noDbConfig = DatabaseConfiguration(jdbcDriver = "java.lang.String",
-                                             jdbcUrl = "",
-                                             jdbcUser = "",
-                                             jdbcPassword = "")
+  val noDbConfig =
+    DatabaseConfiguration(jdbcDriver = "java.lang.String", jdbcUrl = "", user = "", password = "")
   val noJobsConf = JobsConfiguration("none", "noone", "http://nowhere", "features", "results")
 
   val fakeFeaturesDAL = FeaturesDAL(noDbConfig)
-  val fakeResultsDAL  = FakeJobResultsDAL()
-  val fakeMetaDbConfig = new MetaDatabaseConfig(noDbConfig) {
-    override def testConnection(jdbcUrl: String): Unit = ()
-  }
 
-  case class FakeMiningService(chronosServiceRef: ActorRef,
-                               resultDB: JobResultsDAL,
-                               featuresDB: FeaturesDAL)
-      extends MiningService(chronosServiceRef,
-                            fakeFeaturesDAL,
-                            fakeResultsDAL,
-                            fakeMetaDbConfig,
-                            noJobsConf,
-                            "") {
-
-    override def newExperimentActor(coordinatorConfig: CoordinatorConfig): ActorRef =
-      system.actorOf(FakeActor.echoActorProps)
-
-    override def newCoordinatorActor(coordinatorConfig: CoordinatorConfig): ActorRef =
-      system.actorOf(FakeActor.echoActorProps)
-
-  }
-
-  case class FakeApi(implicit val system: ActorSystem) extends Api {
-    override implicit def actorRefFactory: ActorRefFactory = system
-
-    override lazy val mining_service: MiningService =
-      FakeMiningService(chronosHttp, fakeResultsDAL, fakeFeaturesDAL)
-
-    override def config: Config = ConfigFactory.load()
-
-    override def featuresDAL: FeaturesDAL = fakeFeaturesDAL
-
-    override def jobResultService: JobResultsDAL = fakeResultsDAL
-
-    override def metaDbConfig: MetaDatabaseConfig = fakeMetaDbConfig
-  }
-
-  def query2job(query: ExperimentQuery) = ExperimentActor.Job(
+  def experimentQuery2job(query: ExperimentQuery) = ExperimentActor.Job(
     jobId = UUID.randomUUID().toString,
     inputDb = "",
     inputTable = "",
@@ -105,7 +71,7 @@ class MasterRouterTest
     metadata = JsObject.empty
   )
 
-  def query2job(query: MiningQuery): DockerJob = DockerJob(
+  def miningQuery2job(query: MiningQuery): DockerJob = DockerJob(
     jobId = UUID.randomUUID().toString,
     dockerImage = "",
     inputDb = "",
@@ -114,19 +80,38 @@ class MasterRouterTest
     metadata = JsObject.empty
   )
 
-  "Master Actor " must {
+  class MasterRouterUnderTest(coordinatorConfig: CoordinatorConfig,
+                              algorithmLibraryService: AlgorithmLibraryService)
+      extends MasterRouter(coordinatorConfig,
+                           algorithmLibraryService,
+                           experimentQuery2job,
+                           miningQuery2job) {
 
-    val api = FakeApi()
+    override def newExperimentActor: ActorRef =
+      system.actorOf(Props(new FakeExperimentActor()))
+
+    override def newCoordinatorActor: ActorRef =
+      system.actorOf(Props(new FakeCoordinatorActor()))
+
+  }
+
+  val config: Config                                                      = ConfigFactory.load()
+  val jdbcConfigs: String => ConfigUtil.Validation[DatabaseConfiguration] = _ => Valid(noDbConfig)
+
+  val coordinatorConfig: CoordinatorConfig = CoordinatorConfig(
+    system.actorOf(FakeActor.echoActorProps),
+    None,
+    fakeFeaturesDAL,
+    jobResultService,
+    noJobsConf,
+    jdbcConfigs.apply
+  )
+
+  "Master Actor " must {
 
     val router =
       system.actorOf(
-        Props(
-          new MasterRouter(api,
-                           fakeFeaturesDAL,
-                           fakeResultsDAL,
-                           experimentQuery2job(fakeMetaDbConfig),
-                           miningQuery2job(fakeMetaDbConfig))
-        )
+        Props(new MasterRouterUnderTest(coordinatorConfig, algorithmLibraryService))
       )
 
     "starts new experiments" in {
@@ -146,7 +131,7 @@ class MasterRouterTest
       within(limit seconds) {
 
         (1 to limit).foreach { _ =>
-          expectMsgType[Start](5 seconds)
+          expectMsgType[QueryResult](5 seconds)
         }
 
         expectNoMsg()
@@ -177,8 +162,8 @@ class MasterRouterTest
 
         (1 to overflow).foreach { i =>
           expectMsgPF[Unit](5 seconds) {
-            case _: Start         => successfulStarts += 1
-            case _: ErrorResponse => failures += 1
+            case QueryResult(_, _, _, _, _, Some(_), None) => successfulStarts += 1
+            case QueryResult(_, _, _, _, _, None, Some(_)) => failures += 1
           }
         }
 
@@ -207,7 +192,7 @@ class MasterRouterTest
       within(limit seconds) {
 
         (1 to limit).foreach { _ =>
-          expectMsgType[Start](5 seconds)
+          expectMsgType[QueryResult](5 seconds)
         }
 
         expectNoMsg()
